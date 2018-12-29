@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <title>集成WebSocket示例</title>
+</head>
+<body>
+<div>
+    <input type="text" id="userName"/>
+    <button id="connect" onclick="connect();">用户连接</button>
+    <button id="disconnect" onclick="disconnect();">断开连接</button>
+    <button onclick="getUserInfo();">获取当前用户详情</button>
+    <button onclick="getNotification();">系统通知消息</button>
+    <hr/>
+    <div>
+        <h1>系统通知</h1>
+        <span id="notification"></span>
+    </div>
+
+    <hr/>
+    <div>
+        <h1>用户详情</h1>
+        <span id="userInfo"></span>
+    </div>
+</div>
+<script type="text/javascript" src="../static/sockjs.min.js"></script>
+<script type="text/javascript" src="../static/stomp.min.js"></script>
+<script type="text/javascript" src="../static/jquery-3.1.1.min.js"></script>
+<script type="text/javascript">
+    $(function(){
+        setConnect(false);
+    });
+    function setConnect(connected){
+        $("#connect").attr({disabled:connected});
+        $("#disconnect").attr({disabled:!connected});
+    }
+
+    var stomp = undefined;
+    function connect() {
+        var name = $('#userName').val();
+        if(name == '') {
+            alert("请输入用户名建立连接！");
+            return;
+        } else {
+            startConnect(name);
+            setConnect(true);
+        }
+    }
+
+    function startConnect(userName) {
+        var socket = new SockJS('/connectPoint');
+        //创建STOMP客户端连接，目标地址为/connectPoint的STOMP代理
+        stomp = Stomp.over(socket);
+        //打印stomp输出信息
+        stomp.debug = function(str) {
+            console.log("【"+userName+"】:" + str + "\n");
+        };
+
+        var user = {
+            "username":"admin",
+            "password":"admin"
+        }
+        //建立连接
+        stomp.connect(user, function(frame) {
+            //订阅系统初始化消息
+            stomp.subscribe('/app/init', function(response) {
+                showUserInfo("/app/init: " + response.body);
+            });
+
+            //连接成功后订阅/topic/notification目标发送的消息，该地址在Controller中用@SendTo指定
+            stomp.subscribe('/topic/notification', function(response) {
+                showNotification("/topic/notification:" + response.body);
+            });
+
+            //订阅用户详情信息,如果服务端实现了身份认证，那么这里的destination地址为：/user/queue/userInfo，
+            // 即客户端订阅的时候不需要指定具体用户，服务端会自动发送到连接时指定的对应用户
+            stomp.subscribe('/user/'+userName+'/queue/userInfo', function(response) {
+                showUserInfo("/user/"+userName+"/queue/userInfo:" + response.body);
+            });
+
+            stomp.subscribe('/user/'+userName+'/queue/error', function(response) {
+                alert('/user/queue/error : ' + response.body);
+            });
+            var user = {
+                "userName" : $("#userName").val()
+            }
+            stomp.send("/app/errorTest",{},JSON.stringify(user));
+
+        });
+
+        socket.onclose = function(o) {
+            alert('服务端已经关闭连接了');
+        };
+    }
+
+    function disconnect() {
+        if(stomp != null) {
+            stomp.disconnect();
+        }
+        setConnect(false);
+    }
+    function getUserInfo() {
+        var user = {
+            "userName" : $("#userName").val()
+        }
+        if(checkConnectState()) {
+            stomp.send("/app/getUserInfo",{}, JSON.stringify(user));
+        }
+    }
+
+    function getNotification() {
+        if(checkConnectState()) {
+            stomp.send("/app/getNotifications",{}, {});
+        }
+    }
+
+    function checkConnectState() {
+        if(typeof(stomp) == "undefined" || !stomp.connected) {
+            alert('连接已中断，请检查！');
+            return false;
+        }
+        return true;
+    }
+
+    function showUserInfo(message){
+        $("#userInfo").html(message);
+    }
+
+    function showNotification(message){
+        $("#notification").html(message);
+    }
+
+</script>
+</body>
+</html>
+

@@ -1,0 +1,6 @@
+com\interceptor\CustomerChannelInterceptor.class
+com\config\WebSocketConfig.class
+com\bean\CustomerMessage.class
+com\config\WebInitializer.class
+com\config\WebMvcConfig.class
+com\controller\WebSocketController.class
